@@ -76,7 +76,7 @@ func Test_repositoryResourceContentsHandler(t *testing.T) {
 		{
 			Blob:     "IyBUZXN0IFJlcG9zaXRvcnkKClRoaXMgaXMgYSB0ZXN0IHJlcG9zaXRvcnku",
 			MIMEType: "image/png",
-			URI:      "",
+			URI:      "https://github.com/owner/repo/blob/main/data.png",
 		},
 	}
 
@@ -84,7 +84,7 @@ func Test_repositoryResourceContentsHandler(t *testing.T) {
 		{
 			Text:     "# Test Repository\n\nThis is a test repository.",
 			MIMEType: "text/markdown",
-			URI:      "",
+			URI:      "https://github.com/owner/repo/blob/main/README.md",
 		},
 	}
 

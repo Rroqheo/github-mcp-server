@@ -1,0 +1,25 @@
+[package]
+name = "claudia-ultimate"
+version = "2.0.0"
+description = "Claudia Ultimate Desktop Application"
+authors = ["Your Name"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.70"
+
+[lib]
+name = "claudia_ultimate_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0.0", features = ["notification"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+
+[features]
+custom-protocol = ["tauri/custom-protocol"] 

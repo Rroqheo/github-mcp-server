@@ -1,0 +1,216 @@
+name: 🚀 Advanced CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  GO_VERSION: '1.24'
+  CACHE_VERSION: 'v1'
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  # 🔍 代码质量检查
+  quality:
+    name: 📊 Code Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: 🔄 Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🐹 Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: 📦 Cache Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: 🔧 Install golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          args: --timeout=5m --verbose
+
+      - name: 🧪 Run Tests with Coverage
+        run: |
+          go test -race -coverprofile=coverage.out -covermode=atomic ./...
+          go tool cover -html=coverage.out -o coverage.html
+
+      - name: 📊 Upload Coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.out
+          flags: unittests
+          name: codecov-umbrella
+
+  # 🏗️ 构建测试
+  build:
+    name: 🏗️ Build & Test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        go-version: ['1.24', '1.25']
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+
+    steps:
+      - name: 🔄 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🐹 Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+
+      - name: 📦 Cache Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ matrix.go-version }}-
+
+      - name: 🔧 Download Dependencies
+        run: go mod download
+
+      - name: 🧪 Run Tests
+        run: go test -race -v ./...
+
+      - name: 🏗️ Build Application
+        run: |
+          go build -v -ldflags="-s -w" ./cmd/github-mcp-server
+          go build -v -ldflags="-s -w" ./cmd/mcpcurl
+
+      - name: 📦 Build for Multiple Platforms
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o bin/github-mcp-server-linux-amd64 ./cmd/github-mcp-server
+          GOOS=linux GOARCH=arm64 go build -o bin/github-mcp-server-linux-arm64 ./cmd/github-mcp-server
+          GOOS=darwin GOARCH=amd64 go build -o bin/github-mcp-server-darwin-amd64 ./cmd/github-mcp-server
+          GOOS=darwin GOARCH=arm64 go build -o bin/github-mcp-server-darwin-arm64 ./cmd/github-mcp-server
+          GOOS=windows GOARCH=amd64 go build -o bin/github-mcp-server-windows-amd64.exe ./cmd/github-mcp-server
+
+      - name: 📦 Upload Build Artifacts
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.go-version }}
+          path: bin/
+
+  # 🔒 安全扫描
+  security:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 🔄 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🐹 Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: 🔍 Run Trivy Vulnerability Scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: 📊 Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # 📋 依赖检查
+  dependencies:
+    name: 📋 Dependency Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: 🔄 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🐹 Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: 🔍 Check for Vulnerable Dependencies
+        run: |
+          go list -m -u all
+          go mod tidy
+          git diff --exit-code go.mod go.sum || (echo "Dependencies need updating" && exit 1)
+
+  # 🚀 发布准备
+  release:
+    name: 🚀 Release Preparation
+    needs: [quality, build, security, dependencies]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 10
+
+    steps:
+      - name: 🔄 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🐹 Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: 📦 Download Dependencies
+        run: go mod download
+
+      - name: 🏗️ Build Release
+        run: |
+          mkdir -p dist
+          GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/github-mcp-server-linux-amd64 ./cmd/github-mcp-server
+          GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o dist/github-mcp-server-linux-arm64 ./cmd/github-mcp-server
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/github-mcp-server-darwin-amd64 ./cmd/github-mcp-server
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/github-mcp-server-darwin-arm64 ./cmd/github-mcp-server
+          GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o dist/github-mcp-server-windows-amd64.exe ./cmd/github-mcp-server
+
+      - name: 📦 Create Release Archive
+        run: |
+          cd dist
+          tar -czf github-mcp-server-linux-amd64.tar.gz github-mcp-server-linux-amd64
+          tar -czf github-mcp-server-linux-arm64.tar.gz github-mcp-server-linux-arm64
+          tar -czf github-mcp-server-darwin-amd64.tar.gz github-mcp-server-darwin-amd64
+          tar -czf github-mcp-server-darwin-arm64.tar.gz github-mcp-server-darwin-arm64
+          zip github-mcp-server-windows-amd64.zip github-mcp-server-windows-amd64.exe
+
+      - name: 📦 Upload Release Assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: dist/ 

@@ -126,3 +126,16 @@ enforcement ladder](https://github.com/mozilla/diversity).
 For answers to common questions about this code of conduct, see the FAQ at
 https://www.contributor-covenant.org/faq. Translations are available at
 https://www.contributor-covenant.org/translations.
+#!/bin/bash
+# 保存为 fix_tauri_config.sh
+
+echo "🔧 修复Tauri配置文件..."
+
+cd /Users/b/Desktop/claudia-scripts-copy/src-tauri
+
+echo "�� 删除不支持的属性..."
+sed -i '' '/"fileDropEnabled": true,/d' tauri.conf.json
+sed -i '' '/"fileDropEnabled": false,/d' tauri.conf.json
+
+echo "✅ 修复完成！"
+echo "🚀 现在可以运行: npm run tauri:dev"

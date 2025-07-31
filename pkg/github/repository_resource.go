@@ -179,7 +179,7 @@ func RepositoryResourceContentsHandler(getClient GetClientFn) func(ctx context.C
 
 					return []mcp.ResourceContents{
 						mcp.TextResourceContents{
-							URI:      request.Params.URI,
+							URI:      fileContent.GetHTMLURL(),
 							MIMEType: mimeType,
 							Text:     string(content),
 						},
@@ -193,7 +193,7 @@ func RepositoryResourceContentsHandler(getClient GetClientFn) func(ctx context.C
 
 				return []mcp.ResourceContents{
 					mcp.BlobResourceContents{
-						URI:      request.Params.URI,
+						URI:      fileContent.GetHTMLURL(),
 						MIMEType: mimeType,
 						Blob:     base64.StdEncoding.EncodeToString(decodedContent), // Encode content as Base64
 					},
